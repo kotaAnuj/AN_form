@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Form Creator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .chat-container {
+            border: 1px solid #ddd;
+            padding: 20px;
+            margin-bottom: 20px;
+            height: 400px;
+            overflow-y: auto;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .input-container {
+            display: flex;
+            gap: 10px;
+        }
+        textarea {
+            flex: 1;
+            padding: 10px;
+            height: 80px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            resize: vertical;
+        }
+        button {
+            padding: 10px 20px;
+            background: #4285f4;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background: #3367d6;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .message {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+            animation: fadeIn 0.3s;
+        }
+        .user-message {
+            background: #e3f2fd;
+        }
+        .ai-message {
+            background: #f5f5f5;
+        }
+        .error-message {
+            background: #ffebee;
+            color: #c62828;
+        }
+        .created-form {
+            margin: 10px 0;
+            padding: 10px;
+            background: #e8f5e9;
+            border-radius: 4px;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <h1>AI Form Creator</h1>
+    <div class="chat-container" id="chat"></div>
+    <div class="input-container">
+        <textarea 
+            id="userInput" 
+            placeholder="Describe the form you want to create... For example: 'Create a customer feedback form with questions about product quality and service satisfaction'"
+        ></textarea>
+        <button id="sendBtn">Create Form</button>
+    </div>
+
+    <script>
+        const chat = document.getElementById('chat');
+        const userInput = document.getElementById('userInput');
+        const sendBtn = document.getElementById('sendBtn');
+
+        function addMessage(text, type = 'ai') {
+            const div = document.createElement('div');
+            div.className = `message ${type}-message`;
+            div.textContent = text;
+            chat.appendChild(div);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        function addFormLink(url) {
+            const div = document.createElement('div');
+            div.className = 'created-form';
+            const link = document.createElement('a');
+            link.href = url;
+            link.target = '_blank';
+            link.textContent = 'Open Form';
+            div.innerHTML = 'Form created successfully! ';
+            div.appendChild(link);
+            chat.appendChild(div);
+        }
+
+        async function handleSubmit() {
+            const text = userInput.value.trim();
+            if (!text) {
+                addMessage('Please enter a description for your form.', 'error');
+                return;
+            }
+
+            try {
+                sendBtn.disabled = true;
+                addMessage(text, 'user');
+                addMessage('Creating your form... Please wait.');
+
+                const response = await fetch('/api/generate-form', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ description: text })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    addFormLink(data.url);
+                    addMessage('Form created successfully! What else would you like to create?');
+                } else {
+                    addMessage(`Error: ${data.error}`, 'error');
+                }
+
+                userInput.value = '';
+            } catch (error) {
+                console.error('Error:', error);
+                addMessage('Sorry, there was an error creating your form. Please try again.', 'error');
+            } finally {
+                sendBtn.disabled = false;
+            }
+        }
+
+        sendBtn.addEventListener('click', handleSubmit);
+        userInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSubmit();
+            }
+        });
+
+        // Initial message
+        addMessage('Welcome! Describe the form you want to create, and I\'ll help you make it. Try to be specific about the questions you want to include.');
+    </script>
+</body>
+</html>
