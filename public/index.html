@@ -1,163 +1,203 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>AI Form Creator</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f5f5f5;
-        }
-        .chat-container {
-            border: 1px solid #ddd;
-            padding: 20px;
-            margin-bottom: 20px;
-            height: 400px;
-            overflow-y: auto;
-            background-color: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .input-container {
-            display: flex;
-            gap: 10px;
-        }
-        textarea {
-            flex: 1;
-            padding: 10px;
-            height: 80px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            resize: vertical;
-        }
-        button {
-            padding: 10px 20px;
-            background: #4285f4;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-        button:hover {
-            background: #3367d6;
-        }
-        button:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-        }
-        .message {
-            margin: 10px 0;
-            padding: 10px;
-            border-radius: 4px;
-            animation: fadeIn 0.3s;
-        }
-        .user-message {
-            background: #e3f2fd;
-        }
-        .ai-message {
-            background: #f5f5f5;
-        }
-        .error-message {
-            background: #ffebee;
-            color: #c62828;
-        }
-        .created-form {
-            margin: 10px 0;
-            padding: 10px;
-            background: #e8f5e9;
-            border-radius: 4px;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>Login and Form Generator</title>
+  <!-- Firebase App (the core Firebase SDK) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+  <!-- Firebase Authentication -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    button { margin: 5px; padding: 10px 15px; }
+  </style>
 </head>
 <body>
-    <h1>AI Form Creator</h1>
-    <div class="chat-container" id="chat"></div>
-    <div class="input-container">
-        <textarea 
-            id="userInput" 
-            placeholder="Describe the form you want to create... For example: 'Create a customer feedback form with questions about product quality and service satisfaction'"
-        ></textarea>
-        <button id="sendBtn">Create Form</button>
-    </div>
+  <h1>Login and Generate Form</h1>
+  
+  <!-- Authentication Section -->
+  <div id="auth-section">
+    <button id="login-button">Login with Google</button>
+    <button id="logout-button" style="display:none;">Logout</button>
+  </div>
+  
+  <!-- Display User Info -->
+  <div id="user-info" style="display:none;">
+    <p id="user-email"></p>
+    <p id="user-token"></p>
+  </div>
+  
+  <!-- Application Section (visible after login) -->
+  <div id="app-section" style="display:none;">
+    <button id="generate-form">Generate Form</button>
+    <button id="generate-form-sheet">Generate Form & Sheet</button>
+    <button id="list-forms">List My Forms</button>
+    <div id="output"></div>
+  </div>
 
-    <script>
-        const chat = document.getElementById('chat');
-        const userInput = document.getElementById('userInput');
-        const sendBtn = document.getElementById('sendBtn');
+  <script>
+    // TODO: Replace these placeholder values with your actual Firebase configuration
+    const firebaseConfig = {
+        apiKey: "AIzaSyCadZIoYzIc_QhEkGjv86G4rjFwMASd5ig",
+        authDomain: "nothing-d3af4.firebaseapp.com",
+        databaseURL: "https://nothing-d3af4-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "nothing-d3af4",
+        storageBucket: "nothing-d3af4.firebasestorage.app",
+        messagingSenderId: "7155955115",
+        appId: "1:7155955115:web:3bd80618f9aff1a4dc8eee",
+        measurementId: "G-XSVGL2M8LL"
+      };
 
-        function addMessage(text, type = 'ai') {
-            const div = document.createElement('div');
-            div.className = `message ${type}-message`;
-            div.textContent = text;
-            chat.appendChild(div);
-            chat.scrollTop = chat.scrollHeight;
-        }
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
 
-        function addFormLink(url) {
-            const div = document.createElement('div');
-            div.className = 'created-form';
-            const link = document.createElement('a');
-            link.href = url;
-            link.target = '_blank';
-            link.textContent = 'Open Form';
-            div.innerHTML = 'Form created successfully! ';
-            div.appendChild(link);
-            chat.appendChild(div);
-        }
+    // Get references to UI elements
+    const loginButton = document.getElementById('login-button');
+    const logoutButton = document.getElementById('logout-button');
+    const userInfoDiv = document.getElementById('user-info');
+    const userEmailP = document.getElementById('user-email');
+    const userTokenP = document.getElementById('user-token');
+    const appSection = document.getElementById('app-section');
+    const outputDiv = document.getElementById('output');
+    
+    const generateFormButton = document.getElementById('generate-form');
+    const generateFormSheetButton = document.getElementById('generate-form-sheet');
+    const listFormsButton = document.getElementById('list-forms');
 
-        async function handleSubmit() {
-            const text = userInput.value.trim();
-            if (!text) {
-                addMessage('Please enter a description for your form.', 'error');
-                return;
-            }
-
-            try {
-                sendBtn.disabled = true;
-                addMessage(text, 'user');
-                addMessage('Creating your form... Please wait.');
-
-                const response = await fetch('/api/generate-form', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ description: text })
-                });
-
-                const data = await response.json();
-                
-                if (data.success) {
-                    addFormLink(data.url);
-                    addMessage('Form created successfully! What else would you like to create?');
-                } else {
-                    addMessage(`Error: ${data.error}`, 'error');
-                }
-
-                userInput.value = '';
-            } catch (error) {
-                console.error('Error:', error);
-                addMessage('Sorry, there was an error creating your form. Please try again.', 'error');
-            } finally {
-                sendBtn.disabled = false;
-            }
-        }
-
-        sendBtn.addEventListener('click', handleSubmit);
-        userInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSubmit();
-            }
+    // Observe auth state changes for auto-login
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        // User is signed in
+        loginButton.style.display = 'none';
+        logoutButton.style.display = 'inline-block';
+        userInfoDiv.style.display = 'block';
+        appSection.style.display = 'block';
+        userEmailP.textContent = "Logged in as: " + user.email;
+        user.getIdToken().then(token => {
+          userTokenP.textContent = "Token: " + token.substring(0, 20) + '...'; // show partial token for brevity
         });
+      } else {
+        // User is signed out
+        loginButton.style.display = 'inline-block';
+        logoutButton.style.display = 'none';
+        userInfoDiv.style.display = 'none';
+        appSection.style.display = 'none';
+        outputDiv.innerHTML = '';
+      }
+    });
 
-        // Initial message
-        addMessage('Welcome! Describe the form you want to create, and I\'ll help you make it. Try to be specific about the questions you want to include.');
-    </script>
+    // Trigger login with Google on button click
+    loginButton.addEventListener('click', () => {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      auth.signInWithPopup(provider)
+        .then(result => {
+          console.log("Logged in successfully", result.user);
+        })
+        .catch(error => {
+          console.error("Login error:", error);
+        });
+    });
+
+    // Trigger logout on button click
+    logoutButton.addEventListener('click', () => {
+      auth.signOut()
+        .then(() => {
+          console.log("Logged out successfully");
+        })
+        .catch(error => {
+          console.error("Logout error:", error);
+        });
+    });
+
+    // Function to make API calls with the Firebase ID token
+    function callApi(endpoint, payload) {
+      return auth.currentUser.getIdToken().then(token => {
+        return fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token
+          },
+          body: JSON.stringify(payload)
+        })
+        .then(response => response.json());
+      });
+    }
+
+    // Call server endpoint to generate a Google Form
+    generateFormButton.addEventListener('click', () => {
+      callApi('/api/generate-form', {
+        description: "This is a sample description for form generation.",
+        userEmail: auth.currentUser.email
+      })
+      .then(data => {
+        if (data.success) {
+          outputDiv.innerHTML = `<p>Form created: <a href="${data.url}" target="_blank">${data.title}</a></p>`;
+        } else {
+          outputDiv.textContent = "Error: " + data.error;
+        }
+      })
+      .catch(error => {
+        console.error("Error calling /api/generate-form:", error);
+        outputDiv.textContent = "Error calling server.";
+      });
+    });
+
+    // Call server endpoint to generate a Google Form with a linked Sheet
+    generateFormSheetButton.addEventListener('click', () => {
+      callApi('/api/generate-form-sheet', {
+        description: "This is a sample description for form and sheet generation.",
+        userEmail: auth.currentUser.email
+      })
+      .then(data => {
+        if (data.success) {
+          outputDiv.innerHTML = `<p>Form created: <a href="${data.formUrl}" target="_blank">${data.title}</a></p>
+                                 <p>Linked Sheet: <a href="${data.sheetUrl}" target="_blank">View Sheet</a></p>`;
+        } else {
+          outputDiv.textContent = "Error: " + data.error;
+        }
+      })
+      .catch(error => {
+        console.error("Error calling /api/generate-form-sheet:", error);
+        outputDiv.textContent = "Error calling server.";
+      });
+    });
+
+    // Call server endpoint to list all forms created by the authenticated user
+    listFormsButton.addEventListener('click', () => {
+      auth.currentUser.getIdToken().then(token => {
+        fetch('/api/forms', {
+          method: 'GET',
+          headers: {
+            'Authorization': 'Bearer ' + token
+          }
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            let formsHtml = '<h3>My Forms</h3>';
+            const forms = data.forms;
+            if (Object.keys(forms).length === 0) {
+              formsHtml += '<p>No forms found.</p>';
+            } else {
+              formsHtml += '<ul>';
+              for (const key in forms) {
+                formsHtml += `<li>${forms[key].title} - <a href="${forms[key].formUrl}" target="_blank">View Form</a></li>`;
+              }
+              formsHtml += '</ul>';
+            }
+            outputDiv.innerHTML = formsHtml;
+          } else {
+            outputDiv.textContent = "Error: " + data.error;
+          }
+        })
+        .catch(error => {
+          console.error("Error calling /api/forms:", error);
+          outputDiv.textContent = "Error calling server.";
+        });
+      });
+    });
+  </script>
 </body>
 </html>
